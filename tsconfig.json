@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "./build",
+    "rootDir": "./src",
+    "paths": {
+      "@logger": ["logger/index.ts"],
+      "@service": ["service/index.ts"],
+      "@mdc": ["mdc.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2017",
+    "typeRoots": ["./@types", "./node_modules/@types"]
+  },
+  "include": ["src/**/*.ts"]
+}
