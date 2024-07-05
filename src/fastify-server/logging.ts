@@ -1,6 +1,5 @@
 import {FastifyInstance, FastifyReply, FastifyRequest} from 'fastify';
 import UAParser from 'ua-parser-js';
-import {StatusCodes} from 'http-status-codes';
 import {
   HttpAttributes,
   NetworkAttributes,
@@ -59,6 +58,7 @@ function buildHttpAttributes(
   let http: HttpAttributes = {
     method,
     referer,
+    headers,
     url_details: urlDetails,
     url,
     useragent: userAgent,
@@ -166,9 +166,6 @@ function logErrors(app: FastifyInstance): void {
   app.addHook(
     'onError',
     async (req: FastifyRequest, res: FastifyReply, err) => {
-      if (res.statusCode < StatusCodes.INTERNAL_SERVER_ERROR) {
-        res.code(StatusCodes.INTERNAL_SERVER_ERROR);
-      }
       const {method, url} = req;
       const {statusCode} = res;
       const http = buildHttpAttributes(req, res);

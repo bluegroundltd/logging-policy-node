@@ -10,8 +10,8 @@ services:
       - 5672:5672
       - 15672:15672
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-devuser}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-devpass}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-pass}
     volumes:
       - rabbit_volume:/var/lib/rabbitmq
 
@@ -41,22 +41,14 @@ services:
       - --mode dev-container
       # enable logs for debugging.
       - --default-log-level=debug
-    image: public.ecr.aws/l2j5o5b6/bluegroundltd/redpanda:v23.2.18
-    container_name: kafka
-    hostname: kafka
+    image: redpandadata/redpanda:v23.2.18
     volumes:
       - kafka_volume:/var/lib/redpanda/data
-    networks:
-      - kafka_network
     ports:
       - 18081:18081
       - 18082:18082
       - 19092:19092
       - 19644:9644
-
-networks:
-  kafka_network:
-    driver: bridge
 
 volumes:
   rabbit_volume:

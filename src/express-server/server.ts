@@ -1,16 +1,22 @@
 import express from 'express';
 import session from 'express-session';
+import responseTime from 'response-time';
 import cookieParser from 'cookie-parser';
-import {buggyOrder, getProducts, getOrders, createOrder} from '@service';
 import {StatusCodes} from 'http-status-codes';
+import {buggyOrder, getProducts, getOrders, createOrder} from '@service';
 import {setupRequestContext} from './context.js';
-import {setupLogging} from './logging.js';
-import {sendToRabbit} from 'rabbit/producer.js';
+import {
+  logIncomingRequests,
+  logOutgoingResponses,
+  logErrors
+} from './logging.js';
+import {sendToRabbit} from 'rabbit/index.js';
 import {sendToKafka} from 'kafka/index.js';
 
 export function createServer() {
   const app = express();
 
+  app.use(responseTime({suffix: false, digits: 0}));
   app.use(express.json());
   app.use(cookieParser());
   app.use(
@@ -28,7 +34,8 @@ export function createServer() {
   setupRequestContext(app);
 
   // Setup Logging
-  setupLogging(app);
+  app.use(logIncomingRequests);
+  app.use(logOutgoingResponses);
 
   // Middleware
   app.use((req, res, next) => {
@@ -90,8 +97,8 @@ export function createServer() {
     res.json(orders);
   });
 
-  app.get('/error', async (req, res) => {
-    const error = await buggyOrder();
+  app.get('/error', (req, res) => {
+    const error = buggyOrder();
     res.json(error);
   });
 
@@ -103,6 +110,21 @@ export function createServer() {
   app.post('/kafka', async (req, res) => {
     await sendToKafka(req.body);
     res.send('Sent to Kafka');
+  });
+
+  app.use(logErrors);
+
+  app.use(function errorHandler(
+    err: Error,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) {
+    if (res.headersSent) {
+      return next(err);
+    }
+    res.status(500);
+    res.send('Server Error');
   });
 
   return app;

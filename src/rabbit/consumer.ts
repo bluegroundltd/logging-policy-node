@@ -1,55 +1,59 @@
 import * as amqp from 'amqplib';
 import {AsyncResource} from 'node:async_hooks';
-import {MDCStore, baseLogger, loggerBindings, mdc} from '@logger';
+import {baseLogger, loggerBindings, mdc} from '@logger';
 import {RABBIT_ORDERS_QUEUE} from 'constants.js';
 import {createOrder} from '@service';
 
 const queue = RABBIT_ORDERS_QUEUE;
 
-const logger = baseLogger.child({
-  ...loggerBindings(import.meta.url),
-  queue
-});
-const logctx = 'rabbit';
+const logger = baseLogger.child(
+  {
+    ...loggerBindings(import.meta.url),
+    queue
+  },
+  {
+    msgPrefix: '[rabbit] '
+  }
+);
 
 export async function startConsumer() {
   try {
-    const connection = await amqp.connect('amqp://devuser:devpass@localhost');
+    const connection = await amqp.connect('amqp://user:pass@localhost');
     const channel = await connection.createChannel();
     await channel.assertQueue(queue, {durable: false});
 
-    const consumer = async (msg: amqp.ConsumeMessage | null) => {
+    const messageConsumer = async (msg: amqp.ConsumeMessage | null) => {
       if (!msg) return;
       const messageId = msg.properties.messageId;
-      const content = JSON.parse(msg.content.toString());
-      const correlationId = msg.properties.correlationId;
+      const orderDetails = JSON.parse(msg.content.toString());
+      const correlationId = msg.properties['x-correlation-id'];
 
       mdc.set('messageId', messageId);
       mdc.set('correlationId', correlationId);
-      mdc.set('user', {id: content.userId});
+      mdc.set('user', {id: orderDetails.userId});
 
       logger.info(
         {
-          content,
+          content: orderDetails,
           messageId
         },
-        `[${logctx}] Received message (queue=${queue})`
+        `Received message (queue=${queue})`
       );
-      await createOrder(content.userId, content.productId, content.quantity);
+      await createOrder(orderDetails);
       channel.ack(msg);
     };
 
-    channel.consume(queue, (msg: amqp.ConsumeMessage | null) => {
+    channel.consume(queue, async (msg: amqp.ConsumeMessage | null) => {
       const scope = {
         entrypoint: 'rabbit/consumer'
       };
-      mdc.run(scope, () => {
+      await mdc.run(scope, () => {
         const asyncResource = new AsyncResource('rabbit-consumer/orders');
-        asyncResource.runInAsyncScope(consumer, null, msg);
+        return asyncResource.runInAsyncScope(messageConsumer, null, msg);
       });
     });
 
-    logger.info(`[${logctx}] Consumer connected (queue=${queue})`);
+    logger.info(`Consumer connected (queue=${queue})`);
 
     return {
       close: async () => {
@@ -57,10 +61,7 @@ export async function startConsumer() {
       }
     };
   } catch (err) {
-    logger.error(
-      {err},
-      `[${logctx}] Error starting Rabbit consumer. (queue=${queue})`
-    );
+    logger.error({err}, `Error starting Rabbit consumer. (queue=${queue})`);
     throw err;
   }
 }

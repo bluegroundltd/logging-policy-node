@@ -1,7 +1,7 @@
 import {AsyncResource} from 'node:async_hooks';
 import {FastifyInstance} from 'fastify';
-import {stringifyHeader} from './helpers.js';
 import {genCorrelationId} from 'helpers.js';
+import {stringifyHeader} from './helpers.js';
 import {MDC, MDCStore, mdc as _mdc} from '@logger';
 
 export function setupRequestContext(app: FastifyInstance, mdc: MDC = _mdc) {
@@ -15,11 +15,11 @@ export function setupRequestContext(app: FastifyInstance, mdc: MDC = _mdc) {
     const entrypoint = 'http/api';
     const requestId = req.id;
     const correlationId =
-      stringifyHeader(req, 'X-Correlation-Id') ||
-      stringifyHeader(req, 'X-Amzn-Trace-Id') ||
+      stringifyHeader(req, 'x-correlation-id') ||
+      stringifyHeader(req, 'x-amzn-trace-id') ||
       genCorrelationId();
-    const clientId = stringifyHeader(req, 'X-Client-Id');
-    const clientName = stringifyHeader(req, 'X-Client-Name');
+    const clientId = stringifyHeader(req, 'x-client-id');
+    const clientName = stringifyHeader(req, 'x-client-name');
     const user = req.session?.user;
 
     const store: Partial<MDCStore> = {

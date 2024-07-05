@@ -9,12 +9,12 @@ export function setupRequestContext(app: Express, mdc: MDC = _mdc) {
     const requestId = KSUID.randomSync().string;
     const entrypoint = 'http/api';
     const correlationId =
-      req.header('X-Correlation-Id') ||
-      req.header('X-Amzn-Trace-Id') ||
+      req.header('x-correlation-id') ||
+      req.header('x-amzn-trace-id') ||
       genCorrelationId();
 
-    const clientId = req.header('X-Client-Id');
-    const clientName = req.header('X-Client-Name');
+    const clientId = req.header('x-client-id');
+    const clientName = req.header('x-client-name');
     const user = req.session?.user;
 
     const store: Partial<MDCStore> = {

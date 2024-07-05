@@ -1,4 +1,5 @@
 import {baseLogger, loggerBindings, mdc} from '@logger';
+import {httpBunClient} from 'axios/client.js';
 import {orderQueue} from 'bull-jobs/order.js';
 import {genRandomId, sleep} from 'helpers.js';
 
@@ -17,20 +18,20 @@ interface Order {
   quantity: number;
 }
 
-export async function getOrders(
-  userId: number
-): Promise<Record<string, unknown>[]> {
+export async function getOrders(userId: number): Promise<Order[]> {
   await sleep(10);
+
   logger.info('Fetched orders');
+
   return [
     {
-      id: 1,
+      id: genRandomId(),
       userId,
       productId: 1,
       quantity: 2
     },
     {
-      id: 2,
+      id: genRandomId(),
       userId,
       productId: 2,
       quantity: 1
@@ -46,12 +47,14 @@ export async function createOrder(orderDetails: OrderDetails): Promise<Order> {
   };
   // Send order to the queue
   await sleep(1000);
+  await httpBunClient.post('/payload', order);
   await orderQueue.add(processRequest, {delay: 1000});
   logger.info({domain: order}, 'Submitted order');
   return order;
 }
 
-export function buggyOrder() {
-  logger.error('Order is buggy!');
+export async function buggyOrder() {
+  logger.info('This is going to blow up');
+  await httpBunClient.post('/status/500');
   throw new Error('kaboom!');
 }

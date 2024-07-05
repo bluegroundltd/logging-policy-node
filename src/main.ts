@@ -5,6 +5,7 @@ import {FastifyInstance} from 'fastify';
 import {logger} from '@logger';
 import {createServer as createFastify} from './fastify-server/index.js';
 import {createServer as createExpress} from './express-server/index.js';
+import {createServer as createKoa} from './koa-server/index.js';
 import {startConsumer as startRabbitConsumer} from './rabbit/index.js';
 import {startConsumer as startKafkaConsumer} from './kafka/index.js';
 import monitorAsync from './debug/async-monitor.js';
@@ -43,11 +44,25 @@ async function startExpress() {
   }
 }
 
+async function startKoa() {
+  const server = await createKoa();
+
+  try {
+    const httpServer = await server.listen({port, host});
+    logger.info(`[server] Koa listening at http://${host}:${port}`);
+    return httpServer;
+  } catch (err) {
+    logger.error(err);
+    process.exit(1);
+  }
+}
+
 (async () => {
   const argv = await yargs(hideBin(process.argv))
     .options({
       fastify: {type: 'boolean', default: false},
-      express: {type: 'boolean', default: false}
+      express: {type: 'boolean', default: false},
+      koa: {type: 'boolean', default: false}
     })
     .parse();
 
@@ -57,7 +72,10 @@ async function startExpress() {
     server = await startFastify();
   } else if (argv.express) {
     server = await startExpress();
+  } else if (argv.koa) {
+    server = await startKoa();
   }
+
   const {close: closeRabbit} = await startRabbitConsumer();
   const {close: closeKafka} = await startKafkaConsumer();
 

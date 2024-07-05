@@ -28,6 +28,7 @@ export interface HttpAttributes {
   useragent_details?: UserAgentDetails;
   useragent?: string;
   version: string;
+  headers: Record<string, unknown>;
 }
 
 export interface NetworkAttributes {

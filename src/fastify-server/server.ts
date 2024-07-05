@@ -11,9 +11,12 @@ import {sendToKafka} from 'kafka/index.js';
 
 export async function createServer() {
   const app: FastifyInstance = Fastify({
-    logger: logger.child({logger: 'fastify-server'}) as FastifyBaseLogger,
-    connectionTimeout: 1000,
-    requestTimeout: 1000,
+    logger: logger.child(
+      {logger: 'fastify-server'},
+      {msgPrefix: '[http] '}
+    ) as FastifyBaseLogger,
+    connectionTimeout: 10_000,
+    requestTimeout: 10_000,
     // Disable default request logging as we're using our custom logger
     disableRequestLogging: true
   });

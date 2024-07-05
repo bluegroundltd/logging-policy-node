@@ -1,4 +1,4 @@
-import {Request, Response, NextFunction} from 'express';
+import Koa, {Context, Next} from 'koa';
 import UAParser from 'ua-parser-js';
 import {StatusCodes} from 'http-status-codes';
 import {
@@ -7,12 +7,14 @@ import {
   UrlDetails,
   UserAgentDetails,
   baseLogger,
-  loggerBindings
+  loggerBindings,
+  mdc
 } from '@logger';
+import { genCorrelationId } from 'helpers.js';
 
 export {baseLogger as logger, baseLogger, loggerBindings};
 
-const logger = baseLogger.child({logger: 'express-server'});
+const logger = baseLogger.child({logger: 'koa-server'});
 
 function getUserAgentDetails(userAgent?: string): UserAgentDetails | undefined {
   if (!userAgent) {
@@ -33,9 +35,9 @@ function getUserAgentDetails(userAgent?: string): UserAgentDetails | undefined {
   };
 }
 
-function buildHttpAttributes(req: Request, res?: Response): HttpAttributes {
-  const {method, url, headers, hostname, protocol, query, httpVersion} = req;
-  const localPort = req.socket.localPort;
+function buildHttpAttributes(ctx: Context): HttpAttributes {
+  const {method, url, headers, hostname, protocol, query, req} = ctx;
+  const localPort = ctx.socket.localPort;
   const {
     referer,
     'user-agent': userAgent,
@@ -62,29 +64,28 @@ function buildHttpAttributes(req: Request, res?: Response): HttpAttributes {
     url,
     useragent: userAgent,
     useragent_details: userAgentDetails,
-    version: httpVersion
+    version: req.httpVersion
   };
 
-  if (res) {
-    const {statusCode} = res;
+  if (ctx.status) {
     http = {
       ...http,
-      status_code: statusCode
+      status_code: ctx.status
     };
   }
 
   return http;
 }
 
-function buildNetworkAttributes(req: Request): NetworkAttributes | undefined {
-  const {socket} = req;
+function buildNetworkAttributes(ctx: Context): NetworkAttributes | undefined {
+  const {socket, headers} = ctx;
   const {bytesRead, bytesWritten, remoteAddress, remotePort} = socket;
   const {
     'cf-ipcountry': countryCode,
     'cf-connecting-ip': connectedIP,
     'x-forwarded-for': forwardedIP,
     'x-forwarded-port': forwardedPort
-  } = req.headers;
+  } = headers;
 
   const ip =
     (Array.isArray(connectedIP) ? connectedIP.join(',') : connectedIP) ||
@@ -109,75 +110,52 @@ function buildNetworkAttributes(req: Request): NetworkAttributes | undefined {
   };
 }
 
-export function logIncomingRequests(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  const {method, url} = req;
-  const http = buildHttpAttributes(req);
-  const network = buildNetworkAttributes(req);
+async function logIncomingRequests(ctx: Context, next: Next) {
+  const {method, url} = ctx;
+  const http = buildHttpAttributes(ctx);
+  const network = buildNetworkAttributes(ctx);
   const attributes = {http, network};
   const msg = `[req] ${method} ${url}`;
 
   logger.info(attributes, msg);
-  next();
+  await next();
 }
 
-export function logOutgoingResponses(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  function onResponse() {
-    res.off('finish', onResponse);
-    res.off('close', onResponse);
-    if (res.isLogged) {
-      return;
-    }
-    const {method, url} = req;
-    const {statusCode} = res;
-    const http = buildHttpAttributes(req, res);
-    const network = buildNetworkAttributes(req);
-    const duration = Number(res.getHeader('X-Response-Time'));
-    const attributes = {http, network, duration};
-    const msg = `[res] ${method} ${url} ${statusCode} (${duration}ms)`;
+async function logOutgoingResponses(ctx: Context, next: Next) {
+  // We need to provide correlationId to the function
+  // as listeners run on a different context, and as
+  // a result, they do not have access to the mdc store.
+  function onResponse(correlationId: string) {
+    ctx.res.off('close', onResponse);
 
-    if (statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
+    const {method, url, status} = ctx;
+    const http = buildHttpAttributes(ctx);
+    const network = buildNetworkAttributes(ctx);
+    const duration = Number(ctx.response.get('X-Response-Time'));
+    const attributes = {correlation_id: correlationId, http, network, duration, err: ctx.state.err};
+    const msg = `[res] ${method} ${url} ${status} (${duration}ms)`;
+
+    if (status >= StatusCodes.INTERNAL_SERVER_ERROR) {
       logger.error(attributes, msg);
     } else {
       logger.info(attributes, msg);
     }
   }
 
-  res.once('finish', onResponse);
-  res.once('close', onResponse);
+  const correlationId = mdc.safeGet('correlationId', genCorrelationId()) as unknown as string;
 
-  next();
+  ctx.res.once('close', () => {
+    onResponse(correlationId);
+  });
+
+  await next();
 }
 
-export function logErrors(
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  function onResponse() {
-    res.off('finish', onResponse);
-    res.off('close', onResponse);
-    const {method, url} = req;
-    const {statusCode} = res;
-    const http = buildHttpAttributes(req, res);
-    const network = buildNetworkAttributes(req);
-    const duration = Number(res.getHeader('X-Response-Time'));
-    const attributes = {http, network, duration, err};
-    const msg = `[res] ${method} ${url} ${statusCode}`;
-    res.isLogged = true;
-    logger.error(attributes, msg);
-  }
-
-  res.prependOnceListener('finish', onResponse);
-  res.prependOnceListener('close', onResponse);
-
-  next(err);
+export function setupLogging(app: Koa): void {
+  app.on('error', (err, ctx) => {
+    ctx.state.err = err;
+  });
+  app.use(logIncomingRequests);
+  app.use(logOutgoingResponses);
+  // TODO: Log timeouts
 }

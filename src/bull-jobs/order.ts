@@ -4,10 +4,12 @@ import {REDIS_URL} from 'constants.js';
 import {baseLogger, loggerBindings, mdc} from '@logger';
 import {sleep} from 'helpers.js';
 
-const logger = baseLogger.child({
-  ...loggerBindings
-});
-const logctx = 'bull';
+const logger = baseLogger.child(
+  {
+    ...loggerBindings(import.meta.url),
+  },
+  {msgPrefix: '[bull] '}
+);
 
 interface OrderProcessRequest {
   order: {
@@ -28,28 +30,27 @@ const processOrder = async (job: Job<OrderProcessRequest>) => {
 
   mdc.set('correlationId', correlationId);
   mdc.set('orderId', order.id);
-  mdc.set('user', {id: order.userId});
 
   logger.info(
     {domain: {order: order}},
-    `[${logctx}] Processing order (orderId=${order.id})`
+    `Processing order (orderId=${order.id})`
   );
 
   await sleep(1000);
 
   logger.info(
     {domain: {order: order}},
-    `[${logctx}] Order processed successfully (orderId=${order.id})`
+    `Order processed successfully (orderId=${order.id})`
   );
   return {success: true};
 };
 
-orderQueue.process((job: Job<OrderProcessRequest>) => {
+orderQueue.process(async (job: Job<OrderProcessRequest>) => {
   const scope = {
     entrypoint: 'bull/order'
   };
-  mdc.run(scope, () => {
+  await mdc.run(scope, () => {
     const asyncResource = new AsyncResource('bull/orders');
-    asyncResource.runInAsyncScope(processOrder, null, job);
+    return asyncResource.runInAsyncScope(processOrder, null, job);
   });
 });

@@ -5,8 +5,8 @@
  */
 
 import {pino} from 'pino';
-import {mdc} from './mdc.js';
 import path from 'node:path';
+import {mdc} from './mdc.js';
 import {fileURLToPath} from 'node:url';
 
 const formatters = {

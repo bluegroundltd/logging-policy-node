@@ -20,6 +20,6 @@ export async function sendToKafka(payload: Record<string, unknown> = {}) {
 
   await producer.send({
     topic,
-    messages: [{value: JSON.stringify(payload), headers: {correlationId}}]
+    messages: [{value: JSON.stringify(payload), headers: {'x-correlation-id': correlationId}}]
   });
 }
