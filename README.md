@@ -8,7 +8,7 @@ This repository is a reference implementation of that policy for Node.js service
 
 ## Implementations 🧩
 
-- Uses [async-mdc](https://github.com/bluegroundltd/async-mdc/pkgs/npm/async-mdc) with Pino
+- Manages a Mapped Diagnostic Context using [async-mdc](https://github.com/bluegroundltd/async-mdc/pkgs/npm/async-mdc) with Pino
 - Express
 - Fastify
 - Kafka consumer
